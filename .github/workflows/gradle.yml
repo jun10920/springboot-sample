@@ -27,7 +27,7 @@ env:
 jobs:
   build:
     if: ${{ github.event.pull_request.merged }}
-    runs-on: springboot-sample-runner
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
@@ -50,7 +50,8 @@ jobs:
       uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.0.0
 
     - name: Build with Gradle Wrapper
-      run: ./gradlew bootBuildImage --imageName=${{ secrets.AWS_ACCOUNT_NUM }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/demoapp:d${{ steps.vars.outputs.sha_short }}
+      run: ./gradlew bootJar
+      # run: ./gradlew bootBuildImage --imageName=${{ secrets.AWS_ACCOUNT_NUM }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/demoapp:d${{ steps.vars.outputs.sha_short }}
 
     # AWS 인증
     - name: Configure AWS credentials
@@ -59,14 +60,29 @@ jobs:
         aws-region: ${{ env.REGION }}
         role-to-assume: ${{ secrets.ASSUME_IAM_ROLE }}
 
-    # ECR LOGIN
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
+    - name: install aws cli
+      id: install-aws-cli
+      uses: unfor19/install-aws-cli-action@master
+      with:
+        version: 2
 
-    - name: Publish Docker image
+    - run: aws --version
+      shell: bash
+
+    - name: copy jar to s3
+      shell: bash
       run: |
-          docker push ${{ secrets.AWS_ACCOUNT_NUM }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/demoapp:d${{ steps.vars.outputs.sha_short }}    
+        artifact_path=$(ls build/libs/*.jar | grep -v 'plain' | head -n 1)
+        aws s3 cp "$artifact_path" s3://jun-service-deployment/artifacts/demo-${{ steps.vars.outputs.sha_short }}.jar
+
+    # ECR LOGIN
+    # - name: Login to Amazon ECR
+    #   id: login-ecr
+    #   uses: aws-actions/amazon-ecr-login@v2
+
+    # - name: Publish Docker image
+    #   run: |
+    #       docker push ${{ secrets.AWS_ACCOUNT_NUM }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/demoapp:d${{ steps.vars.outputs.sha_short }}    
 
     # - name: Download task definition
     #   run: |
